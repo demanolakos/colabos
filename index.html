@@ -29,6 +29,10 @@
       background: #333333;
     }
   </style>
+  <script>
+    // Shim para evitar que la app explote si process.env no está definido en el navegador
+    window.process = { env: { API_KEY: "" } };
+  </script>
 <script type="importmap">
 {
   "imports": {
@@ -43,5 +47,6 @@
 </head>
 <body class="bg-white">
   <div id="root"></div>
+  <script type="module" src="./index.tsx"></script>
 </body>
 </html>
