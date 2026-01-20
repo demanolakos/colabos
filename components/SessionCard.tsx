@@ -11,10 +11,14 @@ interface SessionCardProps {
 const SessionCard: React.FC<SessionCardProps> = ({ session, onDelete }) => {
   const getIGLink = (handle: string) => `https://instagram.com/${handle.replace('@', '')}`;
 
+  const formatDisplayDate = (dateStr: string) => {
+    return dateStr.split('-').reverse().join('-');
+  };
+
   const handleShare = () => {
     const text = `
 📸 *COLABO: ${session.title}*
-📅 Fecha: ${session.date}
+📅 Fecha: ${formatDisplayDate(session.date)}
 ⏰ Hora: ${session.time}
 📍 Lugar: ${session.location}
 
@@ -58,7 +62,7 @@ _Generado en Colabos con Manolakos_
           <div className="flex flex-wrap gap-3 text-sm text-neutral-500">
             <div className="flex items-center gap-1">
               <Calendar size={14} className="text-yellow-500" />
-              <span>{session.date}</span>
+              <span>{formatDisplayDate(session.date)}</span>
             </div>
             <div className="flex items-center gap-1">
               <Clock size={14} className="text-yellow-500" />
