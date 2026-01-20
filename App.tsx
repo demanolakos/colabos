@@ -119,7 +119,7 @@ const App: React.FC = () => {
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-black uppercase tracking-tighter leading-none mb-2 text-black">
               Colabos con <span className="text-yellow-400">Manolakos</span>
             </h1>
-            <p className="text-neutral-400 font-medium uppercase tracking-[0.2em] text-xs">Agendamiento Creativo Colaborativo</p>
+            <p className="text-neutral-400 font-medium uppercase tracking-[0.2em] text-xs">Agenda de colaboraciones creativas</p>
           </div>
           
           <button 
