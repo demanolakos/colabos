@@ -287,7 +287,7 @@ const App: React.FC = () => {
       )}
 
       <div className="fixed bottom-10 right-10 pointer-events-none opacity-20 hidden lg:block">
-        <span className="text-9xl font-black uppercase text-neutral-300 rotate-90 origin-bottom-right">2024</span>
+        <span className="text-9xl font-black uppercase text-neutral-300 rotate-90 origin-bottom-right">2026</span>
       </div>
     </div>
   );
