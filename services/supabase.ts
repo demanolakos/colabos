@@ -15,6 +15,8 @@ export const getSupabaseClient = () => {
   const { url, key } = getKeys();
   if (url && key) {
     try {
+      // Validar formato de URL básico
+      if (!url.startsWith('http')) throw new Error("URL inválida");
       supabaseInstance = createClient(url, key);
       return supabaseInstance;
     } catch (e) {
@@ -29,17 +31,20 @@ export const supabaseService = {
   async testConnection(url: string, key: string): Promise<{success: boolean, message: string}> {
     try {
       const client = createClient(url, key);
+      // Intentamos una operación mínima para verificar la tabla
       const { error } = await client.from('sessions').select('id').limit(1);
+      
       if (error) {
-        if (error.code === 'PGRST116') return { success: true, message: 'Conectado (Tabla vacía)' };
+        if (error.code === 'PGRST116') return { success: true, message: '¡Conectado! (La tabla está lista y vacía)' };
         if (error.message.includes('relation "sessions" does not exist')) {
-          return { success: false, message: 'Error: La tabla "sessions" no existe en tu proyecto.' };
+          return { success: false, message: 'ERROR: La tabla "sessions" no existe. ¿Le diste al botón RUN en el SQL Editor?' };
         }
-        return { success: false, message: `Error: ${error.message}` };
+        if (error.code === '42501') return { success: false, message: 'ERROR de Permisos: Debes ejecutar "ALTER TABLE sessions DISABLE ROW LEVEL SECURITY;" en Supabase.' };
+        return { success: false, message: `Error de Supabase: ${error.message}` };
       }
-      return { success: true, message: '¡Conexión exitosa!' };
+      return { success: true, message: '¡Conexión total establecida!' };
     } catch (err: any) {
-      return { success: false, message: `Error de red: ${err.message}` };
+      return { success: false, message: `Error de red: Verifica que la URL sea correcta.` };
     }
   },
 
@@ -54,7 +59,7 @@ export const supabaseService = {
         .order('date', { ascending: true });
       
       if (error) {
-        console.error('Supabase fetch error:', error);
+        console.error('Error al descargar sesiones:', error.message);
         return null;
       }
       return data as PhotoSession[];
@@ -70,12 +75,15 @@ export const supabaseService = {
     try {
       const { data, error } = await client
         .from('sessions')
-        .upsert([session]);
+        .upsert([session], { onConflict: 'id' });
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error al guardar sesión:', error.message);
+        throw error;
+      }
       return data;
     } catch (err) {
-      console.error('Supabase save error:', err);
+      console.error('Error inesperado al guardar:', err);
       return null;
     }
   },
