@@ -2,7 +2,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { PhotoSession } from '../types';
 
-// Intentar obtener de variables de entorno o de localStorage
 const getKeys = () => {
   const url = process.env.SUPABASE_URL || localStorage.getItem('supabase_url');
   const key = process.env.SUPABASE_ANON_KEY || localStorage.getItem('supabase_key');
@@ -15,16 +14,35 @@ export const getSupabaseClient = () => {
   if (supabaseInstance) return supabaseInstance;
   const { url, key } = getKeys();
   if (url && key) {
-    supabaseInstance = createClient(url, key);
-    return supabaseInstance;
+    try {
+      supabaseInstance = createClient(url, key);
+      return supabaseInstance;
+    } catch (e) {
+      console.error("Error al crear cliente Supabase:", e);
+      return null;
+    }
   }
   return null;
 };
 
-// Exportamos la instancia inicial (puede ser null)
-export const supabase = getSupabaseClient();
-
 export const supabaseService = {
+  async testConnection(url: string, key: string): Promise<{success: boolean, message: string}> {
+    try {
+      const client = createClient(url, key);
+      const { error } = await client.from('sessions').select('id').limit(1);
+      if (error) {
+        if (error.code === 'PGRST116') return { success: true, message: 'Conectado (Tabla vacía)' };
+        if (error.message.includes('relation "sessions" does not exist')) {
+          return { success: false, message: 'Error: La tabla "sessions" no existe en tu proyecto.' };
+        }
+        return { success: false, message: `Error: ${error.message}` };
+      }
+      return { success: true, message: '¡Conexión exitosa!' };
+    } catch (err: any) {
+      return { success: false, message: `Error de red: ${err.message}` };
+    }
+  },
+
   async getSessions(): Promise<PhotoSession[] | null> {
     const client = getSupabaseClient();
     if (!client) return null;
@@ -36,12 +54,11 @@ export const supabaseService = {
         .order('date', { ascending: true });
       
       if (error) {
-        console.error('Error fetching sessions:', error.message);
+        console.error('Supabase fetch error:', error);
         return null;
       }
       return data as PhotoSession[];
     } catch (err) {
-      console.error('Unexpected error:', err);
       return null;
     }
   },
@@ -53,15 +70,12 @@ export const supabaseService = {
     try {
       const { data, error } = await client
         .from('sessions')
-        .upsert([session]); // Usamos upsert para actualizar si el ID ya existe
+        .upsert([session]);
       
-      if (error) {
-        console.error('Error saving session:', error.message);
-        return null;
-      }
+      if (error) throw error;
       return data;
     } catch (err) {
-      console.error('Unexpected error:', err);
+      console.error('Supabase save error:', err);
       return null;
     }
   },
@@ -69,20 +83,10 @@ export const supabaseService = {
   async deleteSession(id: string) {
     const client = getSupabaseClient();
     if (!client) return false;
-    
     try {
-      const { error } = await client
-        .from('sessions')
-        .delete()
-        .eq('id', id);
-      
-      if (error) {
-        console.error('Error deleting session:', error.message);
-        return false;
-      }
-      return true;
+      const { error } = await client.from('sessions').delete().eq('id', id);
+      return !error;
     } catch (err) {
-      console.error('Unexpected error:', err);
       return false;
     }
   }
