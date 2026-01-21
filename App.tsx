@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { PhotoSession } from './types';
 import Calendar from './components/Calendar';
 import SessionCard from './components/SessionCard';
@@ -7,7 +7,7 @@ import SessionModal from './components/SessionModal';
 import { supabaseService, getSupabaseClient } from './services/supabase';
 import { Plus, Camera, Layers, LayoutDashboard, Cloud, CloudOff, AlertTriangle, Database, RefreshCw, ArrowUpCircle } from 'lucide-react';
 
-const App = () => {
+const App: React.FC = () => {
   const [sessions, setSessions] = useState<PhotoSession[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -60,10 +60,15 @@ const App = () => {
   }, []);
 
   const handleSaveSession = async (session: PhotoSession) => {
+    setSessions(prev => [session, ...prev].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+    
+    // Backup local siempre por seguridad
+    const currentLocal = JSON.parse(localStorage.getItem('lenslink_sessions') || '[]');
+    localStorage.setItem('lenslink_sessions', JSON.stringify([session, ...currentLocal]));
+
     if (cloudStatus === 'connected') {
       await supabaseService.saveSession(session);
     }
-    setSessions(prev => [session, ...prev].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
     setIsModalOpen(false);
   };
 
@@ -73,6 +78,9 @@ const App = () => {
         await supabaseService.deleteSession(id);
       }
       setSessions(prev => prev.filter(s => s.id !== id));
+      
+      const currentLocal = JSON.parse(localStorage.getItem('lenslink_sessions') || '[]');
+      localStorage.setItem('lenslink_sessions', JSON.stringify(currentLocal.filter((s: any) => s.id !== id)));
     }
   };
 
@@ -105,6 +113,7 @@ const App = () => {
       for (const session of localSessions) {
         await supabaseService.saveSession(session);
       }
+      localStorage.removeItem('lenslink_sessions');
       await loadData();
       alert("Migración completada con éxito.");
     }
@@ -211,7 +220,7 @@ const App = () => {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-64">
             <div className="w-12 h-12 border-4 border-yellow-400 border-t-black rounded-full animate-spin mb-4"></div>
-            <p className="font-black uppercase text-[10px] tracking-widest">Accediendo a la nube...</p>
+            <p className="font-black uppercase text-[10px] tracking-widest">Sincronizando...</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
@@ -246,8 +255,17 @@ const App = () => {
                   <div className="flex gap-10">
                     <div className="bg-neutral-50 border-2 border-black p-4 flex-1">
                       <span className="block text-4xl font-black text-black">{sessions.length}</span>
-                      <span className="text-[10px] text-neutral-400 font-bold uppercase">Sesiones en la nube</span>
+                      <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest">Total Sesiones</span>
                     </div>
+                    {cloudStatus === 'connected' && (
+                      <div className="bg-green-50 border-2 border-green-600 p-4 flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Cloud size={16} className="text-green-600" />
+                          <span className="text-[10px] text-green-600 font-black uppercase">Online</span>
+                        </div>
+                        <span className="text-xs font-bold text-green-800">Cloud Sync Activo</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -256,7 +274,7 @@ const App = () => {
             <div className="lg:col-span-5">
               <h2 className="text-2xl font-black uppercase tracking-tighter mb-6 flex items-center justify-between">
                 <span>{activeTab === 'calendar' ? `Sesiones (${formatDisplayDate(selectedDate)})` : 'Timeline'}</span>
-                {cloudStatus === 'connected' && <span className="text-[10px] text-green-600 bg-green-50 px-2 py-1 border border-green-600 rounded">LIVE</span>}
+                {cloudStatus === 'connected' && <span className="text-[10px] text-green-600 bg-green-50 px-2 py-1 border border-green-600 rounded font-black tracking-widest">LIVE</span>}
               </h2>
               <div className="space-y-6">
                 {filteredSessions.length > 0 ? (
@@ -274,15 +292,15 @@ const App = () => {
 
       {isConfigOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-white border-4 border-black w-full max-w-md p-8 shadow-[10px_10px_0px_0px_rgba(250,204,21,1)]">
+          <div className="bg-white border-4 border-black w-full max-md p-8 shadow-[10px_10px_0px_0px_rgba(250,204,21,1)]">
             <h2 className="text-2xl font-black uppercase mb-2 flex items-center gap-2 text-black">
               <Database className="text-yellow-400" /> Sincronizar Equipo
             </h2>
-            <p className="text-[10px] text-neutral-500 mb-6 font-bold uppercase tracking-tight">Usa las credenciales de tu proyecto de Supabase.</p>
+            <p className="text-[10px] text-neutral-500 mb-6 font-bold uppercase tracking-tight">Configura la conexión con Supabase para compartir sesiones.</p>
             
             <div className="space-y-4 mb-6">
               <div>
-                <label className="block text-[10px] font-black uppercase mb-1 text-black">Project URL (Settings &gt; API)</label>
+                <label className="block text-[10px] font-black uppercase mb-1 text-black">Project URL (Settings {'->'} API)</label>
                 <input 
                   className="w-full border-2 border-black p-3 text-xs outline-none focus:bg-yellow-50 text-black placeholder:text-neutral-300"
                   placeholder="https://su-proyecto.supabase.co"
@@ -291,7 +309,7 @@ const App = () => {
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-black uppercase mb-1 text-black">Anon Key (Settings &gt; API)</label>
+                <label className="block text-[10px] font-black uppercase mb-1 text-black">Anon Key (Settings {'->'} API)</label>
                 <input 
                   className="w-full border-2 border-black p-3 text-xs outline-none focus:bg-yellow-50 text-black placeholder:text-neutral-300"
                   placeholder="eyJhbGci..."
@@ -312,7 +330,7 @@ const App = () => {
               <button 
                 onClick={testAndSaveConfig}
                 disabled={isTesting}
-                className="w-full bg-black text-white p-4 font-black uppercase text-xs hover:bg-yellow-400 hover:text-black transition-colors flex items-center justify-center gap-2"
+                className="w-full bg-black text-white p-4 font-black uppercase text-xs hover:bg-yellow-400 hover:text-black transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {isTesting ? <RefreshCw className="animate-spin" size={16} /> : "Probar y Conectar"}
               </button>
@@ -322,10 +340,6 @@ const App = () => {
               >
                 Cerrar
               </button>
-            </div>
-
-            <div className="mt-6 pt-6 border-t border-neutral-100">
-              <p className="text-[9px] text-neutral-400 font-bold uppercase">Ayuda: Recuerda ejecutar el script SQL en Supabase para crear la tabla 'sessions' y desactivar RLS.</p>
             </div>
           </div>
         </div>
