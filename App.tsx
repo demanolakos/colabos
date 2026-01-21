@@ -1,13 +1,13 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { PhotoSession } from './types';
 import Calendar from './components/Calendar';
 import SessionCard from './components/SessionCard';
 import SessionModal from './components/SessionModal';
 import { supabaseService, getSupabaseClient } from './services/supabase';
-import { Plus, Camera, Layers, LayoutDashboard, Info, Cloud, CloudOff, AlertTriangle, Database, RefreshCw, ArrowUpCircle } from 'lucide-react';
+import { Plus, Camera, Layers, LayoutDashboard, Cloud, CloudOff, AlertTriangle, Database, RefreshCw, ArrowUpCircle } from 'lucide-react';
 
-const App: React.FC = () => {
+const App = () => {
   const [sessions, setSessions] = useState<PhotoSession[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -119,7 +119,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-neutral-50 flex flex-col md:flex-row">
-      {/* Sidebar Navigation */}
       <aside className="w-full md:w-20 lg:w-24 bg-black text-white flex flex-col items-center py-8 gap-10 md:sticky md:top-0 md:h-screen z-40">
         <Camera size={40} className="text-yellow-400" strokeWidth={2.5} />
         
@@ -159,7 +158,6 @@ const App: React.FC = () => {
         </div>
       </aside>
 
-      {/* Main Content Area */}
       <main className="flex-1 p-6 md:p-10 lg:p-16 max-w-7xl mx-auto w-full">
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
           <div>
@@ -274,7 +272,6 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* Modal de Configuración DB */}
       {isConfigOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-white border-4 border-black w-full max-w-md p-8 shadow-[10px_10px_0px_0px_rgba(250,204,21,1)]">
@@ -285,7 +282,7 @@ const App: React.FC = () => {
             
             <div className="space-y-4 mb-6">
               <div>
-                <label className="block text-[10px] font-black uppercase mb-1 text-black">Project URL (Settings > API)</label>
+                <label className="block text-[10px] font-black uppercase mb-1 text-black">Project URL (Settings &gt; API)</label>
                 <input 
                   className="w-full border-2 border-black p-3 text-xs outline-none focus:bg-yellow-50 text-black placeholder:text-neutral-300"
                   placeholder="https://su-proyecto.supabase.co"
@@ -294,7 +291,7 @@ const App: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-black uppercase mb-1 text-black">Anon Key (Settings > API)</label>
+                <label className="block text-[10px] font-black uppercase mb-1 text-black">Anon Key (Settings &gt; API)</label>
                 <input 
                   className="w-full border-2 border-black p-3 text-xs outline-none focus:bg-yellow-50 text-black placeholder:text-neutral-300"
                   placeholder="eyJhbGci..."
