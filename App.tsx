@@ -4,59 +4,72 @@ import { PhotoSession } from './types';
 import Calendar from './components/Calendar';
 import SessionCard from './components/SessionCard';
 import SessionModal from './components/SessionModal';
-import { supabaseService, supabase } from './services/supabase';
-import { Plus, Camera, Layers, LayoutDashboard, Download, Upload, Info, Cloud, CloudOff } from 'lucide-react';
+import { supabaseService, getSupabaseClient } from './services/supabase';
+import { Plus, Camera, Layers, LayoutDashboard, Download, Upload, Info, Cloud, CloudOff, AlertTriangle, Settings, Database } from 'lucide-react';
 
 const App: React.FC = () => {
   const [sessions, setSessions] = useState<PhotoSession[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'calendar' | 'list'>('calendar');
   const [isLoading, setIsLoading] = useState(true);
+  const [cloudStatus, setCloudStatus] = useState<'connected' | 'error' | 'disconnected'>('disconnected');
+  
+  const [dbConfig, setDbConfig] = useState({
+    url: localStorage.getItem('supabase_url') || '',
+    key: localStorage.getItem('supabase_key') || ''
+  });
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isCloudEnabled = !!supabase;
-
-  // Formatear fecha para visualización (YYYY-MM-DD -> DD-MM-YYYY)
   const formatDisplayDate = (dateStr: string) => {
     return dateStr.split('-').reverse().join('-');
   };
 
-  // Initial data load
-  useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      if (isCloudEnabled) {
+  const loadData = async () => {
+    setIsLoading(true);
+    const client = getSupabaseClient();
+    
+    if (client) {
+      try {
         const cloudSessions = await supabaseService.getSessions();
-        if (cloudSessions.length > 0) {
+        if (cloudSessions) {
           setSessions(cloudSessions);
+          setCloudStatus('connected');
           setIsLoading(false);
           return;
+        } else {
+          setCloudStatus('error');
         }
+      } catch (error) {
+        setCloudStatus('error');
       }
-      
-      // Fallback to local storage if cloud is empty or disabled
-      const saved = localStorage.getItem('lenslink_sessions');
-      if (saved) {
-        try {
-          setSessions(JSON.parse(saved));
-        } catch (e) {
-          console.error("Failed to parse local sessions", e);
-        }
+    } else {
+      setCloudStatus('disconnected');
+    }
+    
+    const saved = localStorage.getItem('lenslink_sessions');
+    if (saved) {
+      try {
+        setSessions(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to parse local sessions", e);
       }
-      setIsLoading(false);
-    };
+    }
+    setIsLoading(false);
+  };
 
+  useEffect(() => {
     loadData();
-  }, [isCloudEnabled]);
+  }, []);
 
-  // Sync to local storage for offline redundancy
   useEffect(() => {
     localStorage.setItem('lenslink_sessions', JSON.stringify(sessions));
   }, [sessions]);
 
   const handleSaveSession = async (session: PhotoSession) => {
-    if (isCloudEnabled) {
+    if (cloudStatus === 'connected') {
       await supabaseService.saveSession(session);
     }
     setSessions(prev => [session, ...prev].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
@@ -65,41 +78,19 @@ const App: React.FC = () => {
 
   const handleDeleteSession = async (id: string) => {
     if (confirm('¿Estás seguro de que deseas eliminar esta sesión?')) {
-      if (isCloudEnabled) {
+      if (cloudStatus === 'connected') {
         await supabaseService.deleteSession(id);
       }
       setSessions(prev => prev.filter(s => s.id !== id));
     }
   };
 
-  const exportData = () => {
-    const dataStr = JSON.stringify(sessions, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    const exportFileDefaultName = `colabos_manolakos_backup_${new Date().toISOString().split('T')[0]}.json`;
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
-  };
-
-  const importData = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const fileReader = new FileReader();
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-    
-    fileReader.readAsText(files[0], "UTF-8");
-    fileReader.onload = async e => {
-      try {
-        const content = JSON.parse(e.target?.result as string);
-        if (Array.isArray(content)) {
-          if (confirm('¿Deseas importar estas sesiones?')) {
-            setSessions(content);
-          }
-        }
-      } catch (err) {
-        alert('El archivo no es válido.');
-      }
-    };
+  const saveDbConfig = () => {
+    localStorage.setItem('supabase_url', dbConfig.url.trim());
+    localStorage.setItem('supabase_key', dbConfig.key.trim());
+    setIsConfigOpen(false);
+    // Forzamos recarga para re-instanciar el cliente de Supabase
+    window.location.reload();
   };
 
   const filteredSessions = useMemo(() => {
@@ -118,14 +109,12 @@ const App: React.FC = () => {
         <nav className="flex flex-row md:flex-col gap-6 md:gap-8 flex-1">
           <button 
             onClick={() => setActiveTab('calendar')}
-            title="Calendario"
             className={`p-3 rounded-xl transition-all ${activeTab === 'calendar' ? 'bg-yellow-400 text-black' : 'text-neutral-500 hover:text-white'}`}
           >
             <LayoutDashboard size={24} />
           </button>
           <button 
             onClick={() => setActiveTab('list')}
-            title="Timeline"
             className={`p-3 rounded-xl transition-all ${activeTab === 'list' ? 'bg-yellow-400 text-black' : 'text-neutral-500 hover:text-white'}`}
           >
             <Layers size={24} />
@@ -133,17 +122,15 @@ const App: React.FC = () => {
         </nav>
 
         <div className="hidden md:flex flex-col gap-4 items-center">
-          <div 
-            title={isCloudEnabled ? "Conectado a la nube" : "Modo Local (Sin Supabase)"}
-            className={`p-2 rounded-full ${isCloudEnabled ? 'text-green-400' : 'text-neutral-600'}`}
-          >
-            {isCloudEnabled ? <Cloud size={20} /> : <CloudOff size={20} />}
-          </div>
           <button 
-            onClick={() => alert('Colabos con Manolakos: ' + (isCloudEnabled ? 'Sincronización en la nube activa.' : 'Datos guardados localmente.'))}
-            className="text-neutral-600 hover:text-white transition-colors"
+            onClick={() => setIsConfigOpen(true)}
+            className={`p-2 rounded-full transition-colors ${
+              cloudStatus === 'connected' ? 'text-green-400' : 
+              cloudStatus === 'error' ? 'text-red-500 animate-pulse' : 
+              'text-neutral-600'
+            }`}
           >
-            <Info size={20} />
+            {cloudStatus === 'connected' ? <Cloud size={24} /> : <CloudOff size={24} />}
           </button>
         </div>
       </aside>
@@ -158,14 +145,31 @@ const App: React.FC = () => {
             <p className="text-neutral-400 font-medium uppercase tracking-[0.2em] text-xs">Agenda de colaboraciones creativas</p>
           </div>
           
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="group relative flex items-center gap-2 bg-black text-white px-8 py-4 font-black uppercase tracking-widest text-sm hover:bg-yellow-400 hover:text-black transition-all shadow-[4px_4px_0px_0px_rgba(250,204,21,1)]"
-          >
-            <Plus size={20} />
-            Nueva Sesión
-          </button>
+          <div className="flex gap-4">
+            <button 
+              onClick={() => setIsModalOpen(true)}
+              className="group relative flex items-center gap-2 bg-black text-white px-8 py-4 font-black uppercase tracking-widest text-sm hover:bg-yellow-400 hover:text-black transition-all shadow-[4px_4px_0px_0px_rgba(250,204,21,1)]"
+            >
+              <Plus size={20} />
+              Nueva Sesión
+            </button>
+          </div>
         </header>
+
+        {cloudStatus !== 'connected' && (
+          <div className="bg-white border-2 border-black p-4 mb-8 flex items-center justify-between shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="text-yellow-500" />
+              <p className="text-xs font-bold uppercase">Modo Local Activo - No se sincronizará entre dispositivos</p>
+            </div>
+            <button 
+              onClick={() => setIsConfigOpen(true)}
+              className="bg-black text-white px-4 py-2 text-[10px] font-black uppercase hover:bg-yellow-400 hover:text-black transition-colors"
+            >
+              Configurar Base de Datos
+            </button>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-64">
@@ -175,63 +179,15 @@ const App: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
             <div className="lg:col-span-7 space-y-8">
-              <div className="bg-white p-2 border-2 border-black inline-flex gap-1 mb-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                <button 
-                  onClick={() => setActiveTab('calendar')}
-                  className={`px-4 py-1 text-xs font-black uppercase tracking-widest transition-colors ${activeTab === 'calendar' ? 'bg-black text-white' : 'hover:bg-neutral-100'}`}
-                >
-                  Calendario
-                </button>
-                <button 
-                  onClick={() => setActiveTab('list')}
-                  className={`px-4 py-1 text-xs font-black uppercase tracking-widest transition-colors ${activeTab === 'list' ? 'bg-black text-white' : 'hover:bg-neutral-100'}`}
-                >
-                  Todas las Sesiones
-                </button>
-              </div>
-
               {activeTab === 'calendar' ? (
-                <Calendar 
-                  sessions={sessions}
-                  selectedDate={selectedDate}
-                  onDateClick={setSelectedDate}
-                />
+                <Calendar sessions={sessions} selectedDate={selectedDate} onDateClick={setSelectedDate} />
               ) : (
                 <div className="bg-white border-2 border-black p-8 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                  <div className="flex justify-between items-start mb-4">
-                    <h2 className="text-2xl font-black uppercase tracking-tighter text-black">Resumen General</h2>
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={exportData}
-                        title="Exportar copia de seguridad"
-                        className="p-2 border-2 border-black hover:bg-yellow-400 transition-colors text-black"
-                      >
-                        <Download size={18} />
-                      </button>
-                      <button 
-                        onClick={() => fileInputRef.current?.click()}
-                        title="Importar copia de seguridad"
-                        className="p-2 border-2 border-black hover:bg-yellow-400 transition-colors text-black"
-                      >
-                        <Upload size={18} />
-                      </button>
-                      <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        className="hidden" 
-                        accept=".json" 
-                        onChange={importData} 
-                      />
-                    </div>
-                  </div>
+                  <h2 className="text-2xl font-black uppercase tracking-tighter mb-4">Timeline de Colaboraciones</h2>
                   <div className="flex gap-10">
                     <div>
                       <span className="block text-4xl font-black text-black">{sessions.length}</span>
                       <span className="text-[10px] text-neutral-400 font-bold uppercase">Sesiones Totales</span>
-                    </div>
-                    <div>
-                      <span className="block text-4xl font-black text-black">{sessions.filter(s => new Date(s.date) > new Date()).length}</span>
-                      <span className="text-[10px] text-neutral-400 font-bold uppercase">Pendientes</span>
                     </div>
                   </div>
                 </div>
@@ -239,37 +195,15 @@ const App: React.FC = () => {
             </div>
 
             <div className="lg:col-span-5">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-black uppercase tracking-tighter text-black">
-                  {activeTab === 'calendar' 
-                    ? `Sesiones (${formatDisplayDate(selectedDate)})` 
-                    : 'Timeline de Colaboraciones'}
-                </h2>
-                {activeTab === 'calendar' && filteredSessions.length > 0 && (
-                  <span className="bg-yellow-400 px-2 py-1 text-[10px] font-black border border-black uppercase text-black">
-                    {filteredSessions.length} Activas
-                  </span>
-                )}
-              </div>
-
+              <h2 className="text-2xl font-black uppercase tracking-tighter mb-6">
+                {activeTab === 'calendar' ? `Sesiones (${formatDisplayDate(selectedDate)})` : 'Próximas Sesiones'}
+              </h2>
               <div className="space-y-6">
                 {filteredSessions.length > 0 ? (
-                  filteredSessions.map(session => (
-                    <SessionCard 
-                      key={session.id} 
-                      session={session} 
-                      onDelete={handleDeleteSession}
-                    />
-                  ))
+                  filteredSessions.map(session => <SessionCard key={session.id} session={session} onDelete={handleDeleteSession} />)
                 ) : (
                   <div className="border-2 border-dashed border-neutral-300 p-12 text-center bg-white/50">
-                    <p className="text-neutral-400 font-bold uppercase text-xs tracking-widest mb-4">No hay sesiones para esta fecha</p>
-                    <button 
-                      onClick={() => setIsModalOpen(true)}
-                      className="text-xs font-black uppercase border-b-2 border-yellow-400 pb-1 text-black hover:text-yellow-600 transition-colors"
-                    >
-                      + Agendar ahora
-                    </button>
+                    <p className="text-neutral-400 font-bold uppercase text-xs tracking-widest">No hay sesiones</p>
                   </div>
                 )}
               </div>
@@ -278,17 +212,57 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {isModalOpen && (
-        <SessionModal 
-          onClose={() => setIsModalOpen(false)}
-          onSave={handleSaveSession}
-          initialDate={selectedDate}
-        />
+      {/* Modal de Configuración DB */}
+      {isConfigOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-white border-4 border-black w-full max-w-md p-8 shadow-[10px_10px_0px_0px_rgba(250,204,21,1)]">
+            <h2 className="text-2xl font-black uppercase mb-2 flex items-center gap-2">
+              <Database className="text-yellow-400" /> Configurar Sincronización
+            </h2>
+            <p className="text-xs text-neutral-500 mb-6 font-medium">Configura Supabase para ver tus sesiones en cualquier dispositivo.</p>
+            
+            <div className="space-y-4 mb-8">
+              <div>
+                <label className="block text-[10px] font-black uppercase mb-1">Supabase Project URL</label>
+                <input 
+                  className="w-full border-2 border-black p-3 text-xs outline-none focus:bg-yellow-50"
+                  placeholder="https://xyz.supabase.co"
+                  value={dbConfig.url}
+                  onChange={e => setDbConfig({...dbConfig, url: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black uppercase mb-1">Anon API Key</label>
+                <input 
+                  className="w-full border-2 border-black p-3 text-xs outline-none focus:bg-yellow-50"
+                  placeholder="eyJhbG..."
+                  value={dbConfig.key}
+                  onChange={e => setDbConfig({...dbConfig, key: e.target.value})}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button 
+                onClick={saveDbConfig}
+                className="flex-1 bg-black text-white p-3 font-black uppercase text-xs hover:bg-yellow-400 hover:text-black transition-colors"
+              >
+                Guardar y Conectar
+              </button>
+              <button 
+                onClick={() => setIsConfigOpen(false)}
+                className="px-6 border-2 border-black font-black uppercase text-xs hover:bg-neutral-100 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
-      <div className="fixed bottom-10 right-10 pointer-events-none opacity-20 hidden lg:block">
-        <span className="text-9xl font-black uppercase text-neutral-300 rotate-90 origin-bottom-right">2026</span>
-      </div>
+      {isModalOpen && (
+        <SessionModal onClose={() => setIsModalOpen(false)} onSave={handleSaveSession} initialDate={selectedDate} />
+      )}
     </div>
   );
 };

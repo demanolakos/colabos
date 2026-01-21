@@ -31,14 +31,18 @@
     }
   </style>
   <script>
-    // Shim para evitar que la app explote si las variables no están definidas
-    window.process = { 
-      env: { 
-        API_KEY: "",
-        SUPABASE_URL: "",
-        SUPABASE_ANON_KEY: ""
-      } 
+    // Inicialización inteligente de variables de entorno
+    window.process = window.process || { env: {} };
+    window.process.env = {
+      API_KEY: window.process.env.API_KEY || "",
+      // DEBES COMPLETAR ESTOS VALORES PARA LA SINCRONIZACIÓN ENTRE DISPOSITIVOS:
+      SUPABASE_URL: window.process.env.SUPABASE_URL || "", 
+      SUPABASE_ANON_KEY: window.process.env.SUPABASE_ANON_KEY || ""
     };
+    
+    if (!window.process.env.SUPABASE_URL) {
+      console.warn("⚠️ Supabase URL no detectada. La aplicación funcionará en modo LOCAL (sin sincronización entre dispositivos).");
+    }
   </script>
 <script type="importmap">
 {
